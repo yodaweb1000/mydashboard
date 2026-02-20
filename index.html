@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Tablet Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        :root { --glass: rgba(255, 255, 255, 0.1); --border: rgba(255, 255, 255, 0.2); --accent: #4facfe; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #141e30; background-size: cover; background-position: center; background-attachment: fixed; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; transition: background 0.5s ease; overflow-x: hidden; }
+        #clock { color: white; font-size: 4.5rem; font-weight: 200; margin-bottom: 20px; text-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .search-container { margin-bottom: 20px; width: 85%; max-width: 400px; transition: 0.4s; opacity: 0; transform: translateY(-20px); pointer-events: none; }
+        .search-container.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
+        #searchInput { width: 100%; padding: 12px 20px; border-radius: 25px; border: none; background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); color: white; outline: none; }
+        .tablet-screen { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 20px; width: 85%; max-width: 800px; padding: 50px; background: var(--glass); backdrop-filter: blur(30px); border-radius: 50px; border: 1px solid var(--border); box-shadow: 0 50px 100px rgba(0,0,0,0.5); min-height: 150px; }
+        .app-container { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        .edit-mode .app-container { animation: jiggle 0.3s infinite ease-in-out; }
+        @keyframes jiggle { 0% { transform: rotate(-1deg); } 50% { transform: rotate(1.5deg); } 100% { transform: rotate(-1deg); } }
+        .icon-box { width: 75px; height: 75px; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); pointer-events: none; }
+        .icon-box img { width: 100%; height: 100%; object-fit: cover; }
+        .app-label { color: white; margin-top: 10px; font-size: 13px; text-shadow: 0 2px 5px rgba(0,0,0,0.5); text-align: center; }
+        .del-btn { position: absolute; top: -8px; left: -8px; width: 26px; height: 26px; background: #ff4d4d; color: white; border-radius: 50%; border: 2px solid white; display: none; align-items: center; justify-content: center; z-index: 10; }
+        .edit-mode .del-btn { display: flex; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); justify-content: center; align-items: center; }
+        .modal-content { background: #1a1a1a; padding: 30px; border-radius: 20px; width: 90%; max-width: 450px; color: white; border: 1px solid var(--border); text-align: center; }
+        .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; max-height: 150px; overflow-y: auto; }
+        .gallery-item { width: 50px; height: 50px; border-radius: 10px; cursor: pointer; background: white; }
+        #qrImage { background: white; padding: 10px; border-radius: 10px; margin: 15px 0; width: 180px; height: 180px; }
+        .url-display { width: 100%; padding: 10px; background: #333; border: 1px solid #555; color: #00d2ff; border-radius: 8px; font-size: 11px; margin: 10px 0; word-break: break-all; }
+        .input-group { margin-bottom: 12px; display: flex; flex-direction: column; text-align: left; }
+        .input-group label { font-size: 12px; color: #aaa; }
+        .input-group input { padding: 10px; border-radius: 8px; border: none; background: #333; color: white; }
+        .controls { position: fixed; bottom: 30px; right: 30px; display: flex; gap: 10px; }
+        .btn { width: 45px; height: 45px; border-radius: 50%; border: none; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .add { background: #00d2ff; } .edit { background: #f093fb; } .search-btn { background: #4facfe; } .clock-btn { background: #ff9a9e; } .settings-btn { background: #666; } .sync-btn { background: #48c6ef; } .backup-btn { background: #2ecc71; }
+        .modal-btn { padding: 10px; border-radius: 8px; border: none; cursor: pointer; margin-top: 8px; background: var(--accent); color: white; width: 100%; font-weight: bold; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="clock">00:00</div>
+<div class="search-container" id="searchWrapper">
+    <input type="text" id="searchInput" placeholder="Search apps..." oninput="filterApps()" onkeydown="handleSearchKey(event)">
+</div>
+<div class="tablet-screen" id="grid"></div>
+
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <h3>Add Link</h3>
+        <div class="input-group"><label>Name</label><input type="text" id="newName"></div>
+        <div class="input-group"><label>URL</label><input type="text" id="newUrl"></div>
+        <div class="gallery" id="iconGallery"></div>
+        <div class="input-group"><label>Custom Icon URL</label><input type="text" id="newImg"></div>
+        <button class="modal-btn" onclick="saveNewApp()">Save</button>
+        <button class="modal-btn" style="background:#444;" onclick="closeModal('addModal')">Cancel</button>
+    </div>
+</div>
+
+<div id="syncModal" class="modal">
+    <div class="modal-content">
+        <h3>Share & Sync</h3>
+        <p style="font-size: 12px; color: #ccc;">Note: Syncing via QR only works if this file is hosted online (e.g. GitHub Pages).</p>
+        <img id="qrImage" src="" alt="QR Code">
+        <textarea class="url-display" id="urlTextBox" readonly></textarea>
+        <button class="modal-btn" onclick="copySyncLink()">Copy Link</button>
+        <button class="modal-btn" style="background:#444;" onclick="closeModal('syncModal')">Close</button>
+    </div>
+</div>
+
+<div class="controls">
+    <button class="btn backup-btn" onclick="backupToFile()" title="Backup to File">💾</button>
+    <button class="btn sync-btn" onclick="generateSync()" title="Sync & QR">☁️</button>
+    <button class="btn clock-btn" onclick="toggleClock()">👁️</button>
+    <button class="btn search-btn" onclick="toggleSearch()">🔍</button>
+    <button class="btn settings-btn" onclick="changeBG()">🎨</button>
+    <button class="btn edit" onclick="toggleEdit()" id="editBtn">✎</button>
+    <button class="btn add" onclick="openModal('addModal')">+</button>
+</div>
+
+<script>
+    let apps = JSON.parse(localStorage.getItem('myApps')) || [{ name: "Google", url: "https://google.com", img: "https://www.google.com/favicon.ico" }];
+    let config = JSON.parse(localStorage.getItem('myConfig')) || { clockVisible: true, background: "radial-gradient(circle at center, #243b55, #141e30)" };
+    const presetIcons = ["https://www.google.com/favicon.ico", "https://www.facebook.com/favicon.ico", "https://www.instagram.com/static/images/ico/favicon.ico/36b3048c4456.ico", "https://abs.twimg.com/favicons/twitter.2.ico", "https://www.netflix.com/favicon.ico", "https://github.githubassets.com/favicons/favicon.svg", "https://www.discord.com/favicon.ico"];
+    const grid = document.getElementById('grid');
+    const clockEl = document.getElementById('clock');
+    let isEditMode = false;
+    const sortable = new Sortable(grid, { animation: 150, onEnd: saveOrder });
+
+    function init() { checkURLParams(); applyConfig(); updateClock(); setInterval(updateClock, 1000); render(); loadGallery(); }
+
+    function generateSync() {
+        const fullData = { apps, config };
+        const encodedData = btoa(encodeURIComponent(JSON.stringify(fullData)));
+        const baseUrl = window.location.href.split('?')[0];
+        const syncURL = baseUrl + "?data=" + encodedData;
+        
+        document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(syncURL)}`;
+        document.getElementById('urlTextBox').value = syncURL;
+        openModal('syncModal');
+    }
+
+    function copySyncLink() {
+        const copyText = document.getElementById("urlTextBox");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); 
+        try {
+            document.execCommand("copy");
+            alert("Link copied to clipboard!");
+        } catch (err) {
+            alert("Manual copy required: Select text and press Ctrl+C");
+        }
+    }
+
+    function backupToFile() {
+        const dataStr = JSON.stringify({ apps, config }, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "tablet_backup.json";
+        link.click();
+    }
+
+    function checkURLParams() {
+        const params = new URLSearchParams(window.location.search);
+        const cloudData = params.get('data');
+        if (cloudData) {
+            try {
+                const decoded = JSON.parse(decodeURIComponent(atob(cloudData)));
+                apps = decoded.apps; config = decoded.config;
+                localStorage.setItem('myApps', JSON.stringify(apps));
+                localStorage.setItem('myConfig', JSON.stringify(config));
+                window.history.replaceState({}, document.title, window.location.pathname);
+                alert("✅ Sync Complete!");
+            } catch (e) { alert("Sync Error: Invalid Data"); }
+        }
+    }
+
+    function applyConfig() {
+        clockEl.style.display = config.clockVisible ? 'block' : 'none';
+        document.body.style.background = config.background.includes('http') ? `url('${config.background}')` : config.background;
+        localStorage.setItem('myConfig', JSON.stringify(config));
+    }
+    function updateClock() { const now = new Date(); clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    function toggleClock() { config.clockVisible = !config.clockVisible; applyConfig(); }
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function render() {
+        grid.innerHTML = '';
+        apps.forEach((app, index) => {
+            const div = document.createElement('div');
+            div.className = 'app-container';
+            div.dataset.id = index;
+            div.innerHTML = `<div class="del-btn" onclick="deleteApp(${index}, event)">−</div><div class="icon-box"><img src="${app.img}" onerror="this.src='https://via.placeholder.com/80?text=${app.name[0]}'"></div><div class="app-label">${app.name}</div>`;
+            div.onclick = () => { if (!isEditMode) window.open(app.url, '_blank'); };
+            grid.appendChild(div);
+        });
+        localStorage.setItem('myApps', JSON.stringify(apps));
+    }
+    function saveNewApp() {
+        const name = document.getElementById('newName').value;
+        let url = document.getElementById('newUrl').value;
+        let img = document.getElementById('newImg').value;
+        if (!name || !url) return;
+        if (!url.includes('://')) url = 'https://' + url;
+        if (!img) { const dom = url.replace(/^(?:https?:\/\/)?(?:www\.)?/i, "").split('/')[0]; img = `https://www.google.com/s2/favicons?sz=128&domain=${dom}`; }
+        apps.push({ name, url, img }); render(); closeModal('addModal');
+    }
+    function toggleEdit() { isEditMode = !isEditMode; document.body.classList.toggle('edit-mode'); document.getElementById('editBtn').classList.toggle('active'); sortable.option("disabled", !isEditMode); }
+    function deleteApp(i, e) { e.stopPropagation(); apps.splice(i, 1); render(); }
+    function saveOrder() { const n = []; grid.querySelectorAll('.app-container').forEach(item => n.push(apps[item.dataset.id])); apps = n; render(); }
+    function toggleSearch() { document.getElementById('searchWrapper').classList.toggle('visible'); document.getElementById('searchInput').focus(); }
+    function filterApps() { const q = document.getElementById('searchInput').value.toLowerCase(); document.querySelectorAll('.app-container').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(q))); }
+    function handleSearchKey(e) { if (e.key === 'Enter') { const f = document.querySelector('.app-container:not(.hidden)'); if (f) f.click(); } }
+    function loadGallery() { const gal = document.getElementById('iconGallery'); presetIcons.forEach(src => { const i = document.createElement('img'); i.src = src; i.className = 'gallery-item'; i.onclick = () => document.getElementById('newImg').value = src; gal.appendChild(i); }); }
+    function changeBG() { const n = prompt("Enter color or image URL:"); if (n) { config.background = n; applyConfig(); } }
+    init();
+</script>
+</body>
+</html>

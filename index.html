@@ -12,7 +12,7 @@
         .search-container { margin-bottom: 20px; width: 85%; max-width: 400px; transition: 0.4s; opacity: 0; transform: translateY(-20px); pointer-events: none; }
         .search-container.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
         #searchInput { width: 100%; padding: 12px 20px; border-radius: 25px; border: none; background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); color: white; outline: none; }
-        .tablet-screen { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 20px; width: 85%; max-width: 800px; padding: 50px; background: var(--glass); backdrop-filter: blur(30px); border-radius: 50px; border: 1px solid var(--border); box-shadow: 0 50px 100px rgba(0,0,0,0.5); min-height: 150px; }
+        .tablet-screen { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 20px; width: 85%; max-width: 800px; padding: 50px; background: var(--glass); backdrop-filter: blur(30px); border-radius: 50px; border: 1px solid var(--border); box-shadow: 0 50px 100px rgba(0,0,0,0.5); min-height: 150px; position: relative; }
         .app-container { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
         .edit-mode .app-container { animation: jiggle 0.3s infinite ease-in-out; }
         @keyframes jiggle { 0% { transform: rotate(-1deg); } 50% { transform: rotate(1.5deg); } 100% { transform: rotate(-1deg); } }
@@ -35,10 +35,13 @@
         .btn:hover { transform: scale(1.1); }
         .add { background: #00d2ff; } .edit { background: #f093fb; } .search-btn { background: #4facfe; } .clock-btn { background: #ff9a9e; } .settings-btn { background: #666; } .sync-btn { background: #48c6ef; } .backup-btn { background: #2ecc71; } .import-btn { background: #f39c12; }
         .modal-btn { padding: 10px; border-radius: 8px; border: none; cursor: pointer; margin-top: 8px; background: var(--accent); color: white; width: 100%; font-weight: bold; }
-        
-        /* THE FIX: Completely hide the default file input button */
-        #fileInput { display: none !important; visibility: hidden; width: 0; height: 0; }
-        
+        #fileInput { display: none !important; }
+
+        /* Credits Section */
+        .credits {
+            grid-column: 1 / -1; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border);
+            color: rgba(255,255,255,0.4); font-size: 12px; text-align: center; font-style: italic; letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -47,7 +50,9 @@
 <div class="search-container" id="searchWrapper">
     <input type="text" id="searchInput" placeholder="Search apps..." oninput="filterApps()" onkeydown="handleSearchKey(event)">
 </div>
-<div class="tablet-screen" id="grid"></div>
+
+<div class="tablet-screen" id="grid">
+    </div>
 
 <div id="addModal" class="modal"><div class="modal-content"><h3>Add Link</h3><div class="input-group"><label>Name</label><input type="text" id="newName"></div><div class="input-group"><label>URL</label><input type="text" id="newUrl"></div><div class="gallery" id="iconGallery"></div><div class="input-group"><label>Custom Icon URL</label><input type="text" id="newImg"></div><button class="modal-btn" onclick="saveNewApp()">Save</button><button class="modal-btn" style="background:#444;" onclick="closeModal('addModal')">Cancel</button></div></div>
 <div id="syncModal" class="modal"><div class="modal-content"><h3>Share & Sync</h3><img id="qrImage" src="" alt="QR Code"><textarea class="url-display" id="urlTextBox" readonly></textarea><button class="modal-btn" onclick="copySyncLink()">Copy Link</button><button class="modal-btn" style="background:#444;" onclick="closeModal('syncModal')">Close</button></div></div>
@@ -72,9 +77,27 @@
     const grid = document.getElementById('grid');
     const clockEl = document.getElementById('clock');
     let isEditMode = false;
-    const sortable = new Sortable(grid, { animation: 150, onEnd: saveOrder });
+    const sortable = new Sortable(grid, { animation: 150, filter: ".credits", onEnd: saveOrder });
 
     function init() { checkURLParams(); applyConfig(); updateClock(); setInterval(updateClock, 1000); render(); loadGallery(); }
+
+    function render() {
+        grid.innerHTML = '';
+        apps.forEach((app, index) => {
+            const div = document.createElement('div'); div.className = 'app-container'; div.dataset.id = index;
+            div.innerHTML = `<div class="del-btn" onclick="deleteApp(${index}, event)">−</div><div class="icon-box"><img src="${app.img}" onerror="this.src='https://via.placeholder.com/80?text=${app.name[0]}'"></div><div class="app-label">${app.name}</div>`;
+            div.onclick = () => { if (!isEditMode) window.open(app.url, '_blank'); };
+            grid.appendChild(div);
+        });
+        
+        // Add the Credits Section
+        const creds = document.createElement('div');
+        creds.className = 'credits';
+        creds.innerHTML = "Built with Gemini AI & YodaWebmaster :-)";
+        grid.appendChild(creds);
+        
+        localStorage.setItem('myApps', JSON.stringify(apps));
+    }
 
     function handleFileSelect(event) {
         const file = event.target.files[0];
@@ -83,14 +106,10 @@
         reader.onload = function(e) {
             try {
                 const imported = JSON.parse(e.target.result);
-                if (imported.apps && imported.config) {
-                    apps = imported.apps; config = imported.config;
-                    applyConfig(); render(); alert("✅ Import Successful!");
-                }
-            } catch (err) { alert("❌ Invalid Backup File"); }
+                if (imported.apps) { apps = imported.apps; config = imported.config || config; applyConfig(); render(); alert("✅ Import Successful!"); }
+            } catch (err) { alert("❌ Invalid File"); }
         };
         reader.readAsText(file);
-        event.target.value = ''; // Reset for next use
     }
 
     function generateSync() {
@@ -121,24 +140,15 @@
         const blob = new Blob([dataStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = url; link.download = "my_tablet_backup.json"; link.click();
+        link.href = url; link.download = "tablet_backup.json"; link.click();
     }
+
     function copySyncLink() { const box = document.getElementById("urlTextBox"); box.select(); try { document.execCommand("copy"); alert("Copied!"); } catch (e) { alert("Select text manually"); } }
     function applyConfig() { clockEl.style.display = config.clockVisible ? 'block' : 'none'; document.body.style.background = config.background.includes('http') ? `url('${config.background}')` : config.background; localStorage.setItem('myConfig', JSON.stringify(config)); }
     function updateClock() { const now = new Date(); clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
     function toggleClock() { config.clockVisible = !config.clockVisible; applyConfig(); }
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-    function render() {
-        grid.innerHTML = '';
-        apps.forEach((app, index) => {
-            const div = document.createElement('div'); div.className = 'app-container'; div.dataset.id = index;
-            div.innerHTML = `<div class="del-btn" onclick="deleteApp(${index}, event)">−</div><div class="icon-box"><img src="${app.img}" onerror="this.src='https://via.placeholder.com/80?text=${app.name[0]}'"></div><div class="app-label">${app.name}</div>`;
-            div.onclick = () => { if (!isEditMode) window.open(app.url, '_blank'); };
-            grid.appendChild(div);
-        });
-        localStorage.setItem('myApps', JSON.stringify(apps));
-    }
     function saveNewApp() {
         const name = document.getElementById('newName').value; let url = document.getElementById('newUrl').value; let img = document.getElementById('newImg').value;
         if (!name || !url) return;

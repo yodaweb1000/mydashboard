@@ -89,15 +89,60 @@
 
     function init() { checkURLParams(); applyConfig(); updateClock(); setInterval(updateClock, 1000); render(); loadGallery(); }
 
-    function generateSync() {
-        const fullData = { apps, config };
-        const encodedData = btoa(encodeURIComponent(JSON.stringify(fullData)));
-        const baseUrl = window.location.href.split('?')[0];
-        const syncURL = baseUrl + "?data=" + encodedData;
+   function generateSync() {
+        // 1. Prepare a compact data object
+        const compactData = {
+            a: apps.map(app => ({
+                n: app.name,
+                u: app.url,
+                i: app.img
+            })),
+            c: config
+        };
+
+        // 2. Encode
+        const encodedData = btoa(encodeURIComponent(JSON.stringify(compactData)));
+        const baseUrl = window.location.origin + window.location.pathname;
+        currentSyncURL = baseUrl + "?data=" + encodedData;
+
+        // 3. Optimized QR API call (using 'L' for Low density / Larger dots)
+        const qrImg = document.getElementById('qrImage');
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentSyncURL)}&ecc=L&margin=10`;
         
-        document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(syncURL)}`;
-        document.getElementById('urlTextBox').value = syncURL;
+        document.getElementById('urlTextBox').value = currentSyncURL;
         openModal('syncModal');
+    }
+
+    // UPDATED checkURLParams to handle the compact keys (a and c)
+    function checkURLParams() {
+        const params = new URLSearchParams(window.location.search);
+        const cloudData = params.get('data');
+        if (cloudData) {
+            try {
+                const decoded = JSON.parse(decodeURIComponent(atob(cloudData)));
+                
+                // Handle both old format and new compact format
+                if (decoded.a) {
+                    apps = decoded.a.map(app => ({
+                        name: app.n,
+                        url: app.u,
+                        img: app.i
+                    }));
+                    config = decoded.c;
+                } else {
+                    apps = decoded.apps;
+                    config = decoded.config;
+                }
+
+                localStorage.setItem('myApps', JSON.stringify(apps));
+                localStorage.setItem('myConfig', JSON.stringify(config));
+                window.history.replaceState({}, document.title, window.location.pathname);
+                alert("✅ Sync Complete!");
+            } catch (e) { 
+                console.error(e);
+                alert("Sync Error: Data might be too large for a QR code."); 
+            }
+        }
     }
 
     function copySyncLink() {

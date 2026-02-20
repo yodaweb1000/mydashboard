@@ -35,6 +35,10 @@
         .btn:hover { transform: scale(1.1); }
         .add { background: #00d2ff; } .edit { background: #f093fb; } .search-btn { background: #4facfe; } .clock-btn { background: #ff9a9e; } .settings-btn { background: #666; } .sync-btn { background: #48c6ef; } .backup-btn { background: #2ecc71; } .import-btn { background: #f39c12; }
         .modal-btn { padding: 10px; border-radius: 8px; border: none; cursor: pointer; margin-top: 8px; background: var(--accent); color: white; width: 100%; font-weight: bold; }
+        
+        /* THE FIX: Completely hide the default file input button */
+        #fileInput { display: none !important; visibility: hidden; width: 0; height: 0; }
+        
     </style>
 </head>
 <body>
@@ -48,7 +52,7 @@
 <div id="addModal" class="modal"><div class="modal-content"><h3>Add Link</h3><div class="input-group"><label>Name</label><input type="text" id="newName"></div><div class="input-group"><label>URL</label><input type="text" id="newUrl"></div><div class="gallery" id="iconGallery"></div><div class="input-group"><label>Custom Icon URL</label><input type="text" id="newImg"></div><button class="modal-btn" onclick="saveNewApp()">Save</button><button class="modal-btn" style="background:#444;" onclick="closeModal('addModal')">Cancel</button></div></div>
 <div id="syncModal" class="modal"><div class="modal-content"><h3>Share & Sync</h3><img id="qrImage" src="" alt="QR Code"><textarea class="url-display" id="urlTextBox" readonly></textarea><button class="modal-btn" onclick="copySyncLink()">Copy Link</button><button class="modal-btn" style="background:#444;" onclick="closeModal('syncModal')">Close</button></div></div>
 
-<input type="file" id="fileInput" class="hidden" accept=".json" onchange="handleFileSelect(event)">
+<input type="file" id="fileInput" accept=".json" onchange="handleFileSelect(event)">
 
 <div class="controls">
     <button class="btn import-btn" onclick="document.getElementById('fileInput').click()" title="Import JSON">📂</button>
@@ -72,7 +76,6 @@
 
     function init() { checkURLParams(); applyConfig(); updateClock(); setInterval(updateClock, 1000); render(); loadGallery(); }
 
-    // --- IMPORT LOGIC ---
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -81,24 +84,20 @@
             try {
                 const imported = JSON.parse(e.target.result);
                 if (imported.apps && imported.config) {
-                    apps = imported.apps;
-                    config = imported.config;
-                    applyConfig();
-                    render();
-                    alert("✅ Import Successful!");
+                    apps = imported.apps; config = imported.config;
+                    applyConfig(); render(); alert("✅ Import Successful!");
                 }
             } catch (err) { alert("❌ Invalid Backup File"); }
         };
         reader.readAsText(file);
+        event.target.value = ''; // Reset for next use
     }
 
-    // --- OPTIMIZED SYNC LOGIC ---
     function generateSync() {
         const compact = { a: apps.map(app => ({ n: app.name, u: app.url, i: app.img })), c: config };
         const encoded = btoa(encodeURIComponent(JSON.stringify(compact)));
         const syncURL = window.location.origin + window.location.pathname + "?data=" + encoded;
-        
-        document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(syncURL)}&ecc=L&margin=10`;
+        document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(syncURL)}&ecc=L&margin=10`;
         document.getElementById('urlTextBox').value = syncURL;
         openModal('syncModal');
     }
@@ -109,18 +108,14 @@
         if (cloudData) {
             try {
                 const decoded = JSON.parse(decodeURIComponent(atob(cloudData)));
-                if (decoded.a) {
-                    apps = decoded.a.map(app => ({ name: app.n, url: app.u, img: app.i }));
-                    config = decoded.c;
-                } else { apps = decoded.apps; config = decoded.config; }
-                localStorage.setItem('myApps', JSON.stringify(apps));
-                localStorage.setItem('myConfig', JSON.stringify(config));
+                if (decoded.a) { apps = decoded.a.map(app => ({ name: app.n, url: app.u, img: app.i })); config = decoded.c; }
+                else { apps = decoded.apps; config = decoded.config; }
+                localStorage.setItem('myApps', JSON.stringify(apps)); localStorage.setItem('myConfig', JSON.stringify(config));
                 window.history.replaceState({}, document.title, window.location.pathname);
             } catch (e) { console.error(e); }
         }
     }
 
-    // --- REMAINDER OF UTILITIES ---
     function backupToFile() {
         const dataStr = JSON.stringify({ apps, config }, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
@@ -128,11 +123,7 @@
         const link = document.createElement("a");
         link.href = url; link.download = "my_tablet_backup.json"; link.click();
     }
-    function copySyncLink() {
-        const box = document.getElementById("urlTextBox");
-        box.select();
-        try { document.execCommand("copy"); alert("Copied!"); } catch (e) { alert("Select text and copy manually"); }
-    }
+    function copySyncLink() { const box = document.getElementById("urlTextBox"); box.select(); try { document.execCommand("copy"); alert("Copied!"); } catch (e) { alert("Select text manually"); } }
     function applyConfig() { clockEl.style.display = config.clockVisible ? 'block' : 'none'; document.body.style.background = config.background.includes('http') ? `url('${config.background}')` : config.background; localStorage.setItem('myConfig', JSON.stringify(config)); }
     function updateClock() { const now = new Date(); clockEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
     function toggleClock() { config.clockVisible = !config.clockVisible; applyConfig(); }
